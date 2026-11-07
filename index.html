@@ -117,8 +117,8 @@
           <div class="msg" style="margin-top:4px;">Si quedan restos del fondo o sombra, subilo. Si se come parte del frasco, bajalo.</div>
         </div>
         <div>
-          <label>Nitidez y detalle: <b id="v-nit">60</b></label>
-          <input type="range" id="nit" min="0" max="100" value="60">
+          <label>Nitidez: <b id="v-nit">30</b></label>
+          <input type="range" id="nit" min="0" max="100" value="30">
         </div>
         <div>
           <label>Limpiar ruido y bloques: <b id="v-rui">40</b></label>
@@ -126,7 +126,7 @@
           <div class="msg" style="margin-top:4px;">Ayuda con fotos chicas o borrosas de internet. Si se ve “plastificada”, bajalo.</div>
         </div>
         <div>
-          <label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink);margin:0;"><input type="checkbox" id="con" checked> Mejorar contraste y claridad</label>
+          <label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink);margin:0;"><input type="checkbox" id="con"> Negros más profundos (automático)</label>
         </div>
         <div>
           <label>Formato</label>
@@ -136,6 +136,26 @@
           </select>
         </div>
       </div>
+
+      <details class="box" id="aj-box">
+        <summary style="cursor:pointer;font-weight:700;font-size:15px;">Luz y color (como en Canva)</summary>
+        <div class="fields" style="margin-top:14px;">
+          <div><label>Brillo: <b id="v-aj-bri">0</b></label><input type="range" id="aj-bri" min="-100" max="100" value="0"></div>
+          <div><label>Contraste: <b id="v-aj-con">0</b></label><input type="range" id="aj-con" min="-100" max="100" value="0"></div>
+          <div><label>Luces: <b id="v-aj-luz">0</b></label><input type="range" id="aj-luz" min="-100" max="100" value="0"></div>
+          <div><label>Sombras: <b id="v-aj-som">0</b></label><input type="range" id="aj-som" min="-100" max="100" value="0"></div>
+          <div><label>Claridad: <b id="v-aj-cla">0</b></label><input type="range" id="aj-cla" min="0" max="100" value="0"></div>
+          <div><label>Saturación: <b id="v-aj-sat">0</b></label><input type="range" id="aj-sat" min="-100" max="100" value="0"></div>
+          <div><label>Vibración: <b id="v-aj-vib">0</b></label><input type="range" id="aj-vib" min="-100" max="100" value="0"></div>
+          <div><label>Temperatura (frío ← → cálido): <b id="v-aj-tem">0</b></label><input type="range" id="aj-tem" min="-100" max="100" value="0"></div>
+          <div class="row">
+            <button class="btn green" onclick="ajReceta()">Mi receta de Canva</button>
+            <button class="btn soft" onclick="ajAuto()">Automático</button>
+            <button class="btn soft" onclick="ajReset()">Restablecer</button>
+          </div>
+          <div class="msg" style="margin:0;"><b>Mi receta de Canva:</b> contraste 15, luces 10, nitidez 30 y claridad 15. Tus ajustes quedan guardados y se usan en las próximas fotos. El fondo blanco no se toca.</div>
+        </div>
+      </details>
 
       <div class="box fields">
         <div class="row">
@@ -428,12 +448,39 @@ function suaveGrande(Y, w, h, sig) {   // desenfoque grande y rápido (3 pasadas
   return t2;
 }
 
-// ── Mejora final: contraste, nitidez fina, claridad y fondo blanco puro ──
-function mejorar(canvas, nit, contraste) {
+// ── Ajustes de luz y color (como el panel "Ajustar" de Canva). Valores de -1 a 1 ──
+function ajustar(d, n, a, esFondo) {
+  if (!(a.bri || a.con || a.luz || a.som || a.sat || a.vib || a.tem)) return;
+  const kc = 1 + a.con * 0.8;
+  for (let i = 0; i < n; i++) {
+    if (esFondo[i]) continue;
+    const j = i * 4;
+    let r = d[j], g = d[j + 1], b = d[j + 2];
+    if (a.tem) { r += a.tem * 22; b -= a.tem * 22; }
+    if (a.bri) { const o = a.bri * 55; r += o; g += o; b += o; }
+    let y = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (a.luz || a.som) {
+      const t = Math.min(1, Math.max(0, y / 255)), wl = t * t * (3 - 2 * t);
+      const o = a.luz * 45 * wl + a.som * 45 * (1 - wl);
+      r += o; g += o; b += o; y += o;
+    }
+    if (a.con) { r = (r - 128) * kc + 128; g = (g - 128) * kc + 128; b = (b - 128) * kc + 128; y = (y - 128) * kc + 128; }
+    if (a.sat || a.vib) {
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), sa = mx > 1 ? (mx - mn) / mx : 0;
+      const f = Math.max(0, 1 + a.sat + a.vib * (1 - Math.min(1, Math.max(0, sa))));
+      r = y + (r - y) * f; g = y + (g - y) * f; b = y + (b - y) * f;
+    }
+    d[j] = r; d[j + 1] = g; d[j + 2] = b;
+  }
+}
+
+// ── Mejora final: negros, ajustes, nitidez, claridad y fondo blanco puro ──
+function mejorar(canvas, nit, contraste, aj) {
   const w = canvas.width, h = canvas.height, ctx = canvas.getContext('2d', { willReadFrequently: true });
   const im = ctx.getImageData(0, 0, w, h), d = im.data, n = w * h;
   const Y = new Float32Array(n);
-  for (let i = 0; i < n; i++) Y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const esFondo = new Uint8Array(n);   // el fondo blanco original no se toca con los ajustes
+  for (let i = 0; i < n; i++) { esFondo[i] = (d[i * 4] >= 246 && d[i * 4 + 1] >= 246 && d[i * 4 + 2] >= 246) ? 1 : 0; Y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; }
   if (contraste) {   // si los negros están "lavados", se profundizan
     const hist = new Uint32Array(256); let tot = 0;
     for (let i = 0; i < n; i++) if (Y[i] < 240) { hist[Y[i] | 0]++; tot++; }
@@ -443,20 +490,24 @@ function mejorar(canvas, nit, contraste) {
       for (let i = 0; i < n; i++) { for (let c = 0; c < 3; c++) d[i * 4 + c] = (d[i * 4 + c] - lo) * g; Y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; }
     }
   }
-  if (nit > 0) {
-    const a = nit / 100;
-    const fino = gauss(Y, w, h, 1.4);
-    const grande = contraste ? suaveGrande(Y, w, h, 18) : null;
-    const af = 0.5 + 1.5 * a, ag = 0.35 * a;
+  if (aj) {
+    ajustar(d, n, aj, esFondo);
+    for (let i = 0; i < n; i++) Y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  }
+  const cl = aj ? aj.cla : 0;   // claridad (0 a 1): contraste de detalle en zonas medianas
+  if (nit > 0 || cl > 0) {
+    const fino = nit > 0 ? gauss(Y, w, h, 1.4) : null;
+    const grande = cl > 0 ? suaveGrande(Y, w, h, 18) : null;
+    const af = 2.2 * (nit / 100), ag = 1.2 * cl;
     for (let i = 0; i < n; i++) {
-      const df = Y[i] - fino[i];
-      let dl = Math.abs(df) < 1.2 ? df * af * 0.3 : df * af;   // el ruido plano casi no se toca
+      let dl = 0;
+      if (fino) { const df = Y[i] - fino[i]; dl = Math.abs(df) < 1.2 ? df * af * 0.3 : df * af; }   // el ruido plano casi no se toca
       if (grande) dl += ag * (Y[i] - grande[i]);
       d[i * 4] += dl; d[i * 4 + 1] += dl; d[i * 4 + 2] += dl;
     }
   }
   for (let i = 0; i < n; i++) {   // fondo blanco puro
-    if (d[i * 4] >= 246 && d[i * 4 + 1] >= 246 && d[i * 4 + 2] >= 246) { d[i * 4] = 255; d[i * 4 + 1] = 255; d[i * 4 + 2] = 255; }
+    if (esFondo[i] || d[i * 4] >= 246 && d[i * 4 + 1] >= 246 && d[i * 4 + 2] >= 246) { d[i * 4] = 255; d[i * 4 + 1] = 255; d[i * 4 + 2] = 255; }
   }
   ctx.putImageData(im, 0, 0);
 }
@@ -514,7 +565,7 @@ async function procesar() {
   await new Promise(r => setTimeout(r, 0));
   if (mi !== S.token) return;
   const fin = copiarCanvas(B);
-  mejorar(fin, +$('nit').value, $('con').checked);
+  mejorar(fin, +$('nit').value, $('con').checked, ajLeer());
   S.result = fin;
   mostrar(fin, $('cv-out'));
 }
@@ -674,12 +725,27 @@ const drop = $('drop');
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => recibir(e.dataTransfer.files));
 $('tol').addEventListener('input', () => { $('v-tol').textContent = $('tol').value; procesarPronto(); });
-$('nit').addEventListener('input', () => { $('v-nit').textContent = $('nit').value; procesarPronto(); });
+$('nit').addEventListener('input', () => { $('v-nit').textContent = $('nit').value; ajGuardar(); procesarPronto(); });
 $('rui').addEventListener('input', () => { $('v-rui').textContent = $('rui').value; procesarPronto(); });
 $('con').addEventListener('change', procesarPronto);
 $('fmt').addEventListener('change', procesarPronto);
 document.querySelectorAll('input[name=metodo]').forEach(r => r.addEventListener('change', procesar));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar(); });
+
+/* ───────── Ajustes de luz y color ───────── */
+const AJ_IDS = ['bri', 'con', 'luz', 'som', 'cla', 'sat', 'vib', 'tem'], AJ_KEY = 'eshara_ajustes_v1';
+const RECETA = { bri: 0, con: 15, luz: 10, som: 0, cla: 15, sat: 0, vib: 0, tem: 0, nit: 30 };   // la receta de Canva
+function ajLeer() { const o = {}; AJ_IDS.forEach(k => { o[k] = (+$('aj-' + k).value) / 100; }); return o; }
+function ajPoner(v) {
+  AJ_IDS.forEach(k => { const x = v && v[k] != null ? v[k] : 0; $('aj-' + k).value = x; $('v-aj-' + k).textContent = x; });
+  if (v && v.nit != null) { $('nit').value = v.nit; $('v-nit').textContent = v.nit; }
+}
+function ajGuardar() { try { const o = {}; AJ_IDS.forEach(k => { o[k] = +$('aj-' + k).value; }); o.nit = +$('nit').value; localStorage.setItem(AJ_KEY, JSON.stringify(o)); } catch (e) {} }
+function ajReceta() { ajPoner(RECETA); ajGuardar(); procesar(); }
+function ajAuto() { ajPoner({ bri: 0, con: 14, luz: -8, som: 16, cla: 10, sat: 6, vib: 20, tem: 0 }); ajGuardar(); procesar(); }
+function ajReset() { ajPoner({ nit: 0 }); ajGuardar(); procesar(); }
+AJ_IDS.forEach(k => $('aj-' + k).addEventListener('input', () => { $('v-aj-' + k).textContent = $('aj-' + k).value; ajGuardar(); procesarPronto(); }));
+try { const g = localStorage.getItem(AJ_KEY); ajPoner(g ? JSON.parse(g) : RECETA); } catch (e) { ajPoner(RECETA); }
 // Instalación como app y funcionamiento sin internet
 let evInstalar = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); evInstalar = e; $('btn-install').classList.remove('hide'); });
