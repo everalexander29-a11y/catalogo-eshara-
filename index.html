@@ -47,8 +47,8 @@
   .previews canvas { width: 100%; height: auto; display: block; background: repeating-conic-gradient(#f0f0f0 0 25%, #fff 0 50%) 0 0/16px 16px; }
   .msg { font-size: 13px; color: var(--mut); min-height: 18px; margin: 10px 0 0; line-height: 1.5; }
   .msg.err { color: #b00020; }
-  .method { display: flex; gap: 8px; }
-  .method label { flex: 1; margin: 0; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--ink); border: 1px solid #cfcfcf; padding: 12px; display: flex; gap: 8px; align-items: center; cursor: pointer; background: #fff; }
+  .method { display: flex; gap: 8px; flex-wrap: wrap; }
+  .method label { flex: 1 1 150px; margin: 0; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--ink); border: 1px solid #cfcfcf; padding: 12px; display: flex; gap: 8px; align-items: center; cursor: pointer; background: #fff; }
   .method input:checked + span { font-weight: 700; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .card { background: #fff; border: 1px solid var(--line); cursor: pointer; display: flex; flex-direction: column; }
@@ -109,7 +109,17 @@
           <div class="method">
             <label><input type="radio" name="metodo" value="liso" checked><span>Fondo liso (rápido)</span></label>
             <label><input type="radio" name="metodo" value="ia"><span>Con IA (necesita internet)</span></label>
+            <label><input type="radio" name="metodo" value="foto"><span>Solo ajustar a 1200 × 1200 (sin quitar fondo)</span></label>
           </div>
+        </div>
+        <div id="box-acom" class="hide">
+          <label>Cómo acomodarla</label>
+          <select id="acom">
+            <option value="entera">Entera, con bordes del mismo color de la foto</option>
+            <option value="llenar">Llenar todo el cuadro (se recorta lo que sobre)</option>
+            <option value="blanco">Entera, con fondo blanco</option>
+          </select>
+          <div class="msg" style="margin-top:6px;">Solo se corrige el tamaño y la calidad. No se quita nada de la foto ni se pega un fondo que no coincide. Tu página muestra las fotos en cuadrados, por eso 1200 × 1200 es lo ideal.</div>
         </div>
         <div id="box-tol">
           <label>Cuánto fondo quitar: <b id="v-tol">30</b></label>
@@ -131,7 +141,7 @@
         <div>
           <label>Formato</label>
           <select id="fmt">
-            <option value="1:1">Cuadrada (1200 × 1200)</option>
+            <option value="1:1">Cuadrada 1200 × 1200 (la que usa tu página)</option>
             <option value="4:5">Vertical 4:5 (1080 × 1350)</option>
           </select>
         </div>
@@ -409,6 +419,92 @@ function centrar(canvas, fmt, ruido) {
   return out;
 }
 
+// ── ¿El borde de la foto es de un solo color (fondo liso)? ──
+function bordeLiso(canvas) {
+  const w = canvas.width, h = canvas.height, d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const R = [], G = [], B = [], pts = [];
+  const paso = Math.max(1, Math.floor(Math.max(w, h) / 300));
+  const tomar = (x, y) => { const i = (y * w + x) * 4; pts.push([d[i], d[i + 1], d[i + 2]]); R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]); };
+  for (let x = 0; x < w; x += paso) { tomar(x, 0); tomar(x, h - 1); }
+  for (let y = 0; y < h; y += paso) { tomar(0, y); tomar(w - 1, y); }
+  const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
+  const m = [med(R), med(G), med(B)];
+  let cerca = 0;
+  pts.forEach(q => { const dr = q[0] - m[0], dg = q[1] - m[1], db = q[2] - m[2]; if (dr * dr + dg * dg + db * db < 900) cerca++; });
+  return cerca / pts.length >= 0.92;
+}
+
+// Deja la foto completa: sin quitar el fondo. Rellena lo que falta con el mismo color de los bordes de la foto.
+function bordeAfuera(x, canvas, dx, dy, nw, nh, CW, CH) {
+  const w = canvas.width, h = canvas.height;
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  // base: la propia foto, muy difuminada (por si quedan esquinas)
+  const t = document.createElement('canvas'); t.width = 16; t.height = Math.max(2, Math.round(16 * CH / CW));
+  const tx = t.getContext('2d'); tx.imageSmoothingQuality = 'high';
+  const cs = Math.max(t.width / w, t.height / h);
+  tx.drawImage(canvas, (t.width - w * cs) / 2, (t.height - h * cs) / 2, w * cs, h * cs);
+  x.drawImage(t, 0, 0, CW, CH);
+  // franjas: continúan el color exacto del borde de la foto hacia afuera
+  const franja = (sx, sy, sw, sh, vertical) => {
+    const f = document.createElement('canvas'); f.width = vertical ? 10 : 1; f.height = vertical ? 1 : 10;   // pocas muestras = degradé suave, sin rayas
+    const fx = f.getContext('2d'); fx.imageSmoothingEnabled = true; fx.imageSmoothingQuality = 'high';
+    fx.drawImage(canvas, sx, sy, sw, sh, 0, 0, f.width, f.height); return f;
+  };
+  const bw = Math.max(2, Math.round(w * 0.012)), bh = Math.max(2, Math.round(h * 0.012));
+  if (dx > 0) {
+    x.drawImage(franja(0, 0, bw, h, false), 0, dy, dx + 2, nh);
+    x.drawImage(franja(w - bw, 0, bw, h, false), dx + nw - 2, dy, CW - (dx + nw) + 2, nh);
+  }
+  if (dy > 0) {
+    x.drawImage(franja(0, 0, w, bh, true), dx, 0, nw, dy + 2);
+    x.drawImage(franja(0, h - bh, w, bh, true), dx, dy + nh - 2, nw, CH - (dy + nh) + 2);
+  }
+  // hacia afuera, el color se va suavizando hacia el color general del borde (así no quedan manchas)
+  const d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const R = [], G = [], B = [], paso = Math.max(1, Math.floor(Math.max(w, h) / 300));
+  const tomar = (xx, yy) => { const i = (yy * w + xx) * 4; R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]); };
+  for (let xx = 0; xx < w; xx += paso) { tomar(xx, 0); tomar(xx, h - 1); }
+  for (let yy = 0; yy < h; yy += paso) { tomar(0, yy); tomar(w - 1, yy); }
+  const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
+  const c = med(R) + ',' + med(G) + ',' + med(B);
+  const degrade = (x0, y0, x1, y1, gx0, gy0, gx1, gy1) => {   // transparente en la foto → casi opaco afuera
+    const g = x.createLinearGradient(gx0, gy0, gx1, gy1);
+    g.addColorStop(0, 'rgba(' + c + ',0)'); g.addColorStop(1, 'rgba(' + c + ',0.92)');
+    x.fillStyle = g; x.fillRect(x0, y0, x1 - x0, y1 - y0);
+  };
+  if (dx > 0) {
+    degrade(0, dy, dx, dy + nh, dx, 0, 0, 0);
+    degrade(dx + nw, dy, CW, dy + nh, dx + nw, 0, CW, 0);
+  }
+  if (dy > 0) {
+    degrade(dx, 0, dx + nw, dy, 0, dy, 0, 0);
+    degrade(dx, dy + nh, dx + nw, CH, 0, dy + nh, 0, CH);
+  }
+}
+function acomodar(canvas, fmt, modo, ruido) {
+  const w = canvas.width, h = canvas.height, ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const [CW, CH] = fmt === '4:5' ? [1080, 1350] : [1200, 1200];
+  let sx = 0, sy = 0, sw = w, sh = h, nw, nh, dx, dy;
+  if (modo === 'llenar') {
+    const ar = CW / CH;
+    if (w / h > ar) { sw = Math.round(h * ar); sx = Math.round((w - sw) / 2); } else { sh = Math.round(w / ar); sy = Math.round((h - sh) / 2); }
+    nw = CW; nh = CH; dx = 0; dy = 0;
+  } else {
+    const k = Math.min(4, CW / w, CH / h);
+    nw = Math.max(1, Math.round(w * k)); nh = Math.max(1, Math.round(h * k));
+    dx = Math.round((CW - nw) / 2); dy = Math.round((CH - nh) / 2);
+  }
+  const src = ctx.getImageData(sx, sy, sw, sh);
+  if (ruido > 0) limpiar(src, ruido);
+  const rs = lanczos(src, nw, nh);
+  const out = document.createElement('canvas'); out.width = CW; out.height = CH;
+  const x = out.getContext('2d', { willReadFrequently: true });
+  if (modo === 'entera') bordeAfuera(x, canvas, dx, dy, nw, nh, CW, CH);
+  else { x.fillStyle = '#fff'; x.fillRect(0, 0, CW, CH); }
+  x.putImageData(rs, dx, dy);
+  return out;
+}
+
 // ── Desenfoques para la nitidez ──
 function gauss(Y, w, h, sig) {
   const r = Math.max(1, Math.ceil(sig * 3)), k = new Float32Array(2 * r + 1); let sum = 0;
@@ -475,12 +571,13 @@ function ajustar(d, n, a, esFondo) {
 }
 
 // ── Mejora final: negros, ajustes, nitidez, claridad y fondo blanco puro ──
-function mejorar(canvas, nit, contraste, aj) {
+function mejorar(canvas, nit, contraste, aj, blanco) {
+  blanco = blanco !== false;
   const w = canvas.width, h = canvas.height, ctx = canvas.getContext('2d', { willReadFrequently: true });
   const im = ctx.getImageData(0, 0, w, h), d = im.data, n = w * h;
   const Y = new Float32Array(n);
   const esFondo = new Uint8Array(n);   // el fondo blanco original no se toca con los ajustes
-  for (let i = 0; i < n; i++) { esFondo[i] = (d[i * 4] >= 246 && d[i * 4 + 1] >= 246 && d[i * 4 + 2] >= 246) ? 1 : 0; Y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; }
+  for (let i = 0; i < n; i++) { esFondo[i] = (blanco && d[i * 4] >= 246 && d[i * 4 + 1] >= 246 && d[i * 4 + 2] >= 246) ? 1 : 0; Y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; }
   if (contraste) {   // si los negros están "lavados", se profundizan
     const hist = new Uint32Array(256); let tot = 0;
     for (let i = 0; i < n; i++) if (Y[i] < 240) { hist[Y[i] | 0]++; tot++; }
@@ -506,7 +603,7 @@ function mejorar(canvas, nit, contraste, aj) {
       d[i * 4] += dl; d[i * 4 + 1] += dl; d[i * 4 + 2] += dl;
     }
   }
-  for (let i = 0; i < n; i++) {   // fondo blanco puro
+  for (let i = 0; blanco && i < n; i++) {   // fondo blanco puro
     if (esFondo[i] || d[i * 4] >= 246 && d[i * 4 + 1] >= 246 && d[i * 4 + 2] >= 246) { d[i * 4] = 255; d[i * 4 + 1] = 255; d[i * 4 + 2] = 255; }
   }
   ctx.putImageData(im, 0, 0);
@@ -529,12 +626,16 @@ async function procesar() {
   if (!S.img) return;
   const mi = ++S.token;
   const metodo = document.querySelector('input[name=metodo]:checked').value;
-  $('box-tol').classList.toggle('hide', metodo === 'ia');
-  const kA = S.idx + '|' + metodo + '|' + (metodo === 'ia' ? '' : $('tol').value);
+  $('box-tol').classList.toggle('hide', metodo !== 'liso');
+  $('box-acom').classList.toggle('hide', metodo !== 'foto');
+  const kA = S.idx + '|' + metodo + '|' + (metodo === 'liso' ? $('tol').value : '');
   let A = S.cA && S.cA.k === kA ? S.cA.c : null;
   if (!A) {
     try {
-      if (metodo === 'ia') {
+      if (metodo === 'foto') {
+        A = copiarCanvas(S.base);
+        setMsg(S.sugerencia || 'Solo se ajusta al tamaño: no se quita ni se cambia el fondo.');
+      } else if (metodo === 'ia') {
         if (!S.ia) {
           setMsg('Quitando el fondo con IA… la primera vez descarga el modelo y puede tardar un rato.');
           S.ia = await iaQuitarFondo(S.files[S.idx]);
@@ -547,7 +648,7 @@ async function procesar() {
         const frac = quitarFondoLiso(A, +$('tol').value);
         if (frac < 0.05) setMsg('Casi no se detectó fondo. Si la foto tiene fondo, subí “Cuánto fondo quitar” o probá con IA.', true);
         else if (frac > 0.97) setMsg('Se quitó casi toda la foto. Bajá “Cuánto fondo quitar”.', true);
-        else setMsg('');
+        else setMsg(S.liso === false ? 'Este fondo tiene dibujos o colores, así que quitarlo puede quedar mal. Probá “Dejar la foto completa”.' : '');
       }
     } catch (e) {
       setMsg('No se pudo usar la IA (' + (e.message || 'sin conexión') + '). Probá con “Fondo liso” o revisá tu internet.', true);
@@ -559,13 +660,13 @@ async function procesar() {
   }
   await new Promise(r => setTimeout(r, 0));
   if (mi !== S.token) return;
-  const kB = kA + '|' + $('fmt').value + '|' + $('rui').value;
+  const kB = kA + '|' + $('fmt').value + '|' + $('rui').value + '|' + (metodo === 'foto' ? $('acom').value : '');
   let B = S.cB && S.cB.k === kB ? S.cB.c : null;
-  if (!B) { B = centrar(A, $('fmt').value, +$('rui').value); S.cB = { k: kB, c: B }; }
+  if (!B) { B = metodo === 'foto' ? acomodar(A, $('fmt').value, $('acom').value, +$('rui').value) : centrar(A, $('fmt').value, +$('rui').value); S.cB = { k: kB, c: B }; }
   await new Promise(r => setTimeout(r, 0));
   if (mi !== S.token) return;
   const fin = copiarCanvas(B);
-  mejorar(fin, +$('nit').value, $('con').checked, ajLeer());
+  mejorar(fin, +$('nit').value, $('con').checked, ajLeer(), metodo !== 'foto');
   S.result = fin;
   mostrar(fin, $('cv-out'));
 }
@@ -583,7 +684,10 @@ async function abrirFoto() {
   $('marca').value = ''; $('nombre').value = '';
   const base = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
   if (!/^(img|image|whatsapp|photo|foto|dsc|pxl)/i.test(base)) $('nombre').value = base;
-  document.querySelector('input[name=metodo][value=liso]').checked = true;
+  S.liso = bordeLiso(S.base);
+  S.sugerencia = S.liso ? '' : 'Esta foto tiene el fondo con detalles (no es de un solo color), así que solo la ajusté a 1200 × 1200, sin quitar el fondo ni agregar blanco. Si preferís, probá “Fondo liso” o “Con IA”.';
+  if (!S.liso) { const ar = S.base.width / S.base.height; $('fmt').value = '1:1'; $('acom').value = (ar > 0.85 && ar < 1.18) ? 'llenar' : 'entera'; }
+  document.querySelector('input[name=metodo][value=' + (S.liso ? 'liso' : 'foto') + ']').checked = true;
   await procesar();
   $('marca').focus({ preventScroll: true });
 }
@@ -729,6 +833,7 @@ $('nit').addEventListener('input', () => { $('v-nit').textContent = $('nit').val
 $('rui').addEventListener('input', () => { $('v-rui').textContent = $('rui').value; procesarPronto(); });
 $('con').addEventListener('change', procesarPronto);
 $('fmt').addEventListener('change', procesarPronto);
+$('acom').addEventListener('change', procesarPronto);
 document.querySelectorAll('input[name=metodo]').forEach(r => r.addEventListener('change', procesar));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar(); });
 
