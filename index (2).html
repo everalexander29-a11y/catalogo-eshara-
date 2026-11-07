@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catálogo Eshara · fotos de perfumes</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Catálogo">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0a0a0a; --mut:#666; --line:#e2e2e2; --bg:#fafafa; --ok:#0e6b4b; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', Arial, sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; }
+  header { background: #fff; border-bottom: 1px solid var(--line); padding: 14px 16px 0; position: sticky; top: 0; z-index: 5; }
+  h1 { font-family: 'Anton', Impact, sans-serif; font-weight: 400; font-size: 26px; letter-spacing: 0.04em; text-transform: uppercase; }
+  h1 span { font-family: 'DM Sans', Arial, sans-serif; font-size: 12px; letter-spacing: 0.14em; color: var(--mut); margin-left: 8px; }
+  nav { display: flex; gap: 4px; margin-top: 10px; }
+  nav button { flex: 1; background: none; border: none; border-bottom: 3px solid transparent; padding: 12px 8px; font: 500 13px 'DM Sans', Arial, sans-serif; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mut); cursor: pointer; }
+  nav button.on { color: var(--ink); border-bottom-color: var(--ink); }
+  main { max-width: 980px; margin: 0 auto; padding: 18px 16px 60px; }
+  .box { background: #fff; border: 1px solid var(--line); padding: 16px; margin-bottom: 16px; }
+  .drop { border: 2px dashed #bbb; text-align: center; padding: 38px 16px; cursor: pointer; background: #fff; }
+  .drop.over { border-color: var(--ink); background: #f3f3f3; }
+  .drop strong { display: block; font-size: 16px; margin-bottom: 6px; }
+  .drop small { color: var(--mut); }
+  .btn { border: none; background: var(--ink); color: #fff; padding: 13px 18px; font: 500 12px 'DM Sans', Arial, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; }
+  .btn.soft { background: #eee; color: var(--ink); }
+  .btn.green { background: var(--ok); }
+  .btn.red { background: #fff; color: #b00020; border: 1px solid #b00020; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 140px; }
+  label { display: block; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mut); margin: 0 0 6px; }
+  input[type=text], input[type=search], select { width: 100%; padding: 12px; border: 1px solid #cfcfcf; font: 400 15px 'DM Sans', Arial, sans-serif; background: #fff; }
+  input[type=range] { width: 100%; }
+  .fields { display: flex; flex-direction: column; gap: 14px; }
+  .previews { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .previews figure { background: #fff; border: 1px solid var(--line); padding: 6px; }
+  .previews figcaption { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--mut); padding: 4px 2px 8px; }
+  .previews canvas { width: 100%; height: auto; display: block; background: repeating-conic-gradient(#f0f0f0 0 25%, #fff 0 50%) 0 0/16px 16px; }
+  .msg { font-size: 13px; color: var(--mut); min-height: 18px; margin: 10px 0 0; line-height: 1.5; }
+  .msg.err { color: #b00020; }
+  .method { display: flex; gap: 8px; }
+  .method label { flex: 1; margin: 0; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--ink); border: 1px solid #cfcfcf; padding: 12px; display: flex; gap: 8px; align-items: center; cursor: pointer; background: #fff; }
+  .method input:checked + span { font-weight: 700; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .card { background: #fff; border: 1px solid var(--line); cursor: pointer; display: flex; flex-direction: column; }
+  .card img { width: 100%; aspect-ratio: 1/1; object-fit: contain; display: block; background: #fff; }
+  .card div { padding: 8px 10px 10px; font-size: 13px; line-height: 1.35; border-top: 1px solid var(--line); }
+  .card b { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--mut); font-weight: 500; }
+  .top { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .top input { flex: 1 1 220px; }
+  .count { font-size: 13px; color: var(--mut); }
+  .empty { text-align: center; color: var(--mut); padding: 50px 10px; font-size: 14px; line-height: 1.6; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 20; padding: 12px; }
+  .modal.open { display: flex; }
+  .sheet { background: #fff; width: 100%; max-width: 520px; max-height: 94vh; overflow: auto; padding: 14px; }
+  .sheet img { width: 100%; display: block; border: 1px solid var(--line); margin-bottom: 12px; }
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .acts .full { grid-column: 1 / -1; }
+  .note { font-size: 12px; color: var(--mut); line-height: 1.6; margin-top: 20px; }
+  .hide { display: none !important; }
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 18px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 30; }
+  #toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Eshara <span>catálogo de fotos</span></h1>
+  <button id="btn-install" class="btn soft hide" style="margin:8px 0 2px;padding:9px 14px;">Instalar como app</button>
+  <nav>
+    <button id="t-add" class="on" onclick="showTab('add')">Agregar fotos</button>
+    <button id="t-cat" onclick="showTab('cat')">Catálogo (<span id="n-cat">0</span>)</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ───────── AGREGAR ───────── -->
+  <section id="tab-add">
+    <div id="step-pick">
+      <label class="drop" id="drop" for="file">
+        <strong>Elegí las fotos de los perfumes</strong>
+        <small>Podés elegir varias a la vez. También podés arrastrarlas hasta acá.</small>
+      </label>
+      <input type="file" id="file" accept="image/*" multiple class="hide">
+    </div>
+
+    <div id="step-edit" class="hide">
+      <div class="box">
+        <div class="msg" id="queue-info" style="margin:0 0 12px;font-weight:700;color:var(--ink);"></div>
+        <div class="previews">
+          <figure><figcaption>Original</figcaption><canvas id="cv-orig"></canvas></figure>
+          <figure><figcaption>Resultado</figcaption><canvas id="cv-out"></canvas></figure>
+        </div>
+        <div class="msg" id="msg"></div>
+      </div>
+
+      <div class="box fields">
+        <div>
+          <label>Cómo sacar el fondo</label>
+          <div class="method">
+            <label><input type="radio" name="metodo" value="liso" checked><span>Fondo liso (rápido)</span></label>
+            <label><input type="radio" name="metodo" value="ia"><span>Con IA (necesita internet)</span></label>
+          </div>
+        </div>
+        <div id="box-tol">
+          <label>Cuánto fondo quitar: <b id="v-tol">30</b></label>
+          <input type="range" id="tol" min="6" max="90" value="30">
+          <div class="msg" style="margin-top:4px;">Si quedan restos del fondo o sombra, subilo. Si se come parte del frasco, bajalo.</div>
+        </div>
+        <div>
+          <label>Nitidez: <b id="v-nit">40</b></label>
+          <input type="range" id="nit" min="0" max="100" value="40">
+        </div>
+        <div>
+          <label>Formato</label>
+          <select id="fmt">
+            <option value="1:1">Cuadrada (1200 × 1200)</option>
+            <option value="4:5">Vertical 4:5 (1080 × 1350)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="box fields">
+        <div class="row">
+          <div><label>Marca</label><input type="text" id="marca" placeholder="Ej: Afnan" autocomplete="off"></div>
+          <div><label>Nombre del perfume</label><input type="text" id="nombre" placeholder="Ej: 9pm Night Out" autocomplete="off"></div>
+        </div>
+        <div class="row">
+          <button class="btn green" id="btn-save" onclick="guardar()">Guardar en el catálogo</button>
+          <button class="btn soft" onclick="saltar()">Saltar esta foto</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── CATÁLOGO ───────── -->
+  <section id="tab-cat" class="hide">
+    <div class="top">
+      <input type="search" id="q" placeholder="Buscar por marca o nombre..." autocomplete="off">
+      <span class="count" id="count"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty hide" id="empty"></div>
+
+    <div class="box" style="margin-top:24px;">
+      <label>Respaldo</label>
+      <div class="row">
+        <button class="btn soft" onclick="exportar()">Descargar respaldo</button>
+        <button class="btn soft" onclick="document.getElementById('imp').click()">Cargar un respaldo</button>
+      </div>
+      <input type="file" id="imp" accept=".json,application/json" class="hide">
+      <p class="note" style="margin-top:12px;">Las fotos se guardan <b>solo en este navegador y este aparato</b>. Si borrás los datos del navegador, se pierden. Descargá el respaldo de vez en cuando.</p>
+    </div>
+  </section>
+</main>
+
+<!-- visor -->
+<div class="modal" id="modal" onclick="if(event.target===this)cerrar()">
+  <div class="sheet">
+    <img id="m-img" alt="">
+    <div class="fields">
+      <div class="row">
+        <div><label>Marca</label><input type="text" id="m-marca" autocomplete="off"></div>
+        <div><label>Nombre</label><input type="text" id="m-nombre" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="acts">
+      <button class="btn green full" onclick="compartir()">Compartir (WhatsApp, etc.)</button>
+      <button class="btn" onclick="descargar()">Descargar</button>
+      <button class="btn soft" onclick="guardarCambios()">Guardar nombre</button>
+      <button class="btn red" onclick="eliminar()">Eliminar</button>
+      <button class="btn soft" onclick="cerrar()">Cerrar</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
+
+/* ───────── Base de datos del navegador (IndexedDB) ───────── */
+function abrirDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('eshara-catalogo', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('fotos', { keyPath: 'id', autoIncrement: true });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function dbTx(modo, fn) {
+  const d = await abrirDB();
+  return new Promise((res, rej) => {
+    const t = d.transaction('fotos', modo), s = t.objectStore('fotos'), r = fn(s);
+    t.oncomplete = () => { d.close(); res(r && r.result); };
+    t.onerror = () => { d.close(); rej(t.error); };
+    t.onabort = () => { d.close(); rej(t.error); };
+  });
+}
+const dbTodas = () => dbTx('readonly', s => s.getAll());
+const dbAgregar = it => dbTx('readwrite', s => s.add(it));
+const dbActualizar = it => dbTx('readwrite', s => s.put(it));
+const dbBorrar = id => dbTx('readwrite', s => s.delete(id));
+
+/* ───────── Pestañas ───────── */
+function showTab(t) {
+  $('tab-add').classList.toggle('hide', t !== 'add');
+  $('tab-cat').classList.toggle('hide', t !== 'cat');
+  $('t-add').classList.toggle('on', t === 'add');
+  $('t-cat').classList.toggle('on', t === 'cat');
+  if (t === 'cat') renderCatalogo();
+}
+
+/* ───────── Procesado de imagen ───────── */
+const S = { files: [], idx: 0, img: null, base: null, ia: null, token: 0, timer: null };
+
+function cargarImagen(blob) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => { URL.revokeObjectURL(url); res(im); };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo abrir la imagen')); };
+    im.src = url;
+  });
+}
+// Copia la imagen a un canvas con fondo blanco (máx. 1600 px de lado)
+function aCanvas(img, maxLado = 1600) {
+  const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+  const k = Math.min(1, maxLado / Math.max(w0, h0));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w0 * k)); c.height = Math.max(1, Math.round(h0 * k));
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.imageSmoothingQuality = 'high';
+  x.drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+function copiarCanvas(src) {
+  const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+  c.getContext('2d', { willReadFrequently: true }).drawImage(src, 0, 0); return c;
+}
+
+// Fondo liso: se parte desde los bordes y se pinta de blanco todo lo parecido al color del fondo
+function quitarFondoLiso(canvas, tol) {
+  const w = canvas.width, h = canvas.height, ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const im = ctx.getImageData(0, 0, w, h), d = im.data;
+  const R = [], G = [], B = [];
+  const pasoX = Math.max(1, Math.floor(w / 200)), pasoY = Math.max(1, Math.floor(h / 200));
+  const muestra = p => { R.push(d[p * 4]); G.push(d[p * 4 + 1]); B.push(d[p * 4 + 2]); };
+  for (let x = 0; x < w; x += pasoX) { muestra(x); muestra((h - 1) * w + x); }
+  for (let y = 0; y < h; y += pasoY) { muestra(y * w); muestra(y * w + w - 1); }
+  const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
+  const bg = [med(R), med(G), med(B)], t2 = tol * tol;
+  const mask = new Uint8Array(w * h), pila = new Int32Array(w * h);
+  let sp = 0;
+  const parecido = p => {
+    const dr = d[p * 4] - bg[0], dg = d[p * 4 + 1] - bg[1], db = d[p * 4 + 2] - bg[2];
+    return dr * dr + dg * dg + db * db <= t2;
+  };
+  const meter = p => { if (!mask[p] && parecido(p)) { mask[p] = 1; pila[sp++] = p; } };
+  for (let x = 0; x < w; x++) { meter(x); meter((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { meter(y * w); meter(y * w + w - 1); }
+  while (sp) {
+    const p = pila[--sp], x = p % w;
+    if (x > 0) meter(p - 1);
+    if (x < w - 1) meter(p + 1);
+    if (p >= w) meter(p - w);
+    if (p < w * (h - 1)) meter(p + w);
+  }
+  let n = 0; for (let i = 0; i < mask.length; i++) n += mask[i];
+  // borde suave (desenfoque 3x3 de la máscara)
+  const m = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0, c = 0;
+    for (let dy = -1; dy <= 1; dy++) { const yy = y + dy; if (yy < 0 || yy >= h) continue;
+      for (let dx = -1; dx <= 1; dx++) { const xx = x + dx; if (xx < 0 || xx >= w) continue; s += mask[yy * w + xx]; c++; } }
+    m[y * w + x] = s / c;
+  }
+  for (let i = 0; i < m.length; i++) {
+    const a = m[i]; if (a <= 0) continue;
+    d[i * 4] += (255 - d[i * 4]) * a; d[i * 4 + 1] += (255 - d[i * 4 + 1]) * a; d[i * 4 + 2] += (255 - d[i * 4 + 2]) * a;
+  }
+  ctx.putImageData(im, 0, 0);
+  return n / (w * h);   // proporción de la foto que se tomó como fondo
+}
+
+// Recorta alrededor del perfume y lo centra sobre fondo blanco con margen
+function centrar(canvas, fmt) {
+  const w = canvas.width, h = canvas.height, d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4;
+    if (765 - d[i] - d[i + 1] - d[i + 2] > 45) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  }
+  if (x1 < 0) { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; }
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  const [CW, CH] = fmt === '4:5' ? [1080, 1350] : [1200, 1200];
+  const k = Math.min(3, (CW * 0.8) / bw, (CH * 0.8) / bh);
+  const out = document.createElement('canvas'); out.width = CW; out.height = CH;
+  const x = out.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = '#fff'; x.fillRect(0, 0, CW, CH);
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  const dw = bw * k, dh = bh * k;
+  x.drawImage(canvas, x0, y0, bw, bh, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+  return out;
+}
+
+// Nitidez (máscara de enfoque 3x3)
+function afilar(canvas, valor) {
+  if (!valor) return;
+  const w = canvas.width, h = canvas.height, ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const im = ctx.getImageData(0, 0, w, h), d = im.data, o = new Uint8ClampedArray(d), cant = valor / 100 * 1.3;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = (y * w + x) * 4;
+    for (let c = 0; c < 3; c++) {
+      const j = i + c;
+      const blur = (o[j - 4 - w * 4] + o[j - w * 4] + o[j + 4 - w * 4] + o[j - 4] + o[j] + o[j + 4] + o[j - 4 + w * 4] + o[j + w * 4] + o[j + 4 + w * 4]) / 9;
+      d[j] = o[j] + cant * (o[j] - blur);
+    }
+  }
+  ctx.putImageData(im, 0, 0);
+}
+
+function mostrar(src, dest) {
+  dest.width = src.width; dest.height = src.height;
+  dest.getContext('2d').drawImage(src, 0, 0);
+}
+function setMsg(t, err) { const m = $('msg'); m.textContent = t || ''; m.classList.toggle('err', !!err); }
+
+async function iaQuitarFondo(file) {
+  const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm');
+  const blob = await mod.removeBackground(file);
+  return aCanvas(await cargarImagen(blob));
+}
+
+// Recalcula el resultado con los controles actuales
+async function procesar() {
+  if (!S.img) return;
+  const mi = ++S.token;
+  const metodo = document.querySelector('input[name=metodo]:checked').value;
+  $('box-tol').classList.toggle('hide', metodo === 'ia');
+  let trabajo;
+  try {
+    if (metodo === 'ia') {
+      if (!S.ia) {
+        setMsg('Quitando el fondo con IA… la primera vez descarga el modelo y puede tardar un rato.');
+        S.ia = await iaQuitarFondo(S.files[S.idx]);
+        if (mi !== S.token) return;
+      }
+      trabajo = copiarCanvas(S.ia);
+      setMsg('Fondo quitado con IA.');
+    } else {
+      trabajo = copiarCanvas(S.base);
+      const frac = quitarFondoLiso(trabajo, +$('tol').value);
+      if (frac < 0.05) setMsg('Casi no se detectó fondo. Si la foto tiene fondo, subí “Cuánto fondo quitar” o probá con IA.', true);
+      else if (frac > 0.97) setMsg('Se quitó casi toda la foto. Bajá “Cuánto fondo quitar”.', true);
+      else setMsg('');
+    }
+  } catch (e) {
+    setMsg('No se pudo usar la IA (' + (e.message || 'sin conexión') + '). Probá con “Fondo liso” o revisá tu internet.', true);
+    document.querySelector('input[name=metodo][value=liso]').checked = true;
+    S.ia = null;
+    return procesar();
+  }
+  const fin = centrar(trabajo, $('fmt').value);
+  afilar(fin, +$('nit').value);
+  S.result = fin;
+  mostrar(fin, $('cv-out'));
+}
+function procesarPronto() { clearTimeout(S.timer); S.timer = setTimeout(procesar, 150); }
+
+async function abrirFoto() {
+  const f = S.files[S.idx];
+  $('queue-info').textContent = 'Foto ' + (S.idx + 1) + ' de ' + S.files.length;
+  setMsg('Procesando…');
+  try {
+    S.img = await cargarImagen(f);
+  } catch (e) { toast('No se pudo abrir ' + f.name); return siguiente(); }
+  S.base = aCanvas(S.img); S.ia = null; S.token++;
+  mostrar(S.base, $('cv-orig'));
+  $('marca').value = ''; $('nombre').value = '';
+  const base = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+  if (!/^(img|image|whatsapp|photo|foto|dsc|pxl)/i.test(base)) $('nombre').value = base;
+  document.querySelector('input[name=metodo][value=liso]').checked = true;
+  await procesar();
+  $('marca').focus({ preventScroll: true });
+}
+function siguiente() {
+  S.idx++;
+  if (S.idx >= S.files.length) {
+    S.files = []; S.img = null;
+    $('step-edit').classList.add('hide'); $('step-pick').classList.remove('hide');
+    $('file').value = '';
+    toast('Listo. Ya están en el catálogo.');
+    actualizarContador();
+    return;
+  }
+  abrirFoto();
+}
+function saltar() { siguiente(); }
+
+function aBlob(canvas, tipo, calidad) { return new Promise(res => canvas.toBlob(res, tipo, calidad)); }
+async function guardar() {
+  if (!S.result) return;
+  const marca = $('marca').value.trim(), nombre = $('nombre').value.trim();
+  if (!nombre) { toast('Poné el nombre del perfume'); $('nombre').focus(); return; }
+  $('btn-save').disabled = true;
+  try {
+    const blob = await aBlob(S.result, 'image/jpeg', 0.93);
+    const t = document.createElement('canvas'); const k = 360 / S.result.width;
+    t.width = 360; t.height = Math.round(S.result.height * k);
+    t.getContext('2d').drawImage(S.result, 0, 0, t.width, t.height);
+    const thumb = await aBlob(t, 'image/jpeg', 0.82);
+    await dbAgregar({ marca, nombre, creado: Date.now(), blob, thumb });
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+    toast('Guardado ✓');
+    siguiente();
+  } catch (e) {
+    toast('No se pudo guardar. Puede que no haya espacio.');
+  }
+  $('btn-save').disabled = false;
+}
+
+/* ───────── Catálogo ───────── */
+let TODAS = [], urls = [], actual = null;
+async function actualizarContador() { try { $('n-cat').textContent = (await dbTodas()).length; } catch (e) {} }
+async function renderCatalogo() {
+  urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+  TODAS = (await dbTodas()).sort((a, b) => b.creado - a.creado);
+  $('n-cat').textContent = TODAS.length;
+  const q = norm($('q').value).split(/\s+/).filter(Boolean);
+  const lista = TODAS.filter(it => { const t = norm(it.marca + ' ' + it.nombre); return q.every(p => t.includes(p)); });
+  const g = $('grid'); g.innerHTML = '';
+  lista.forEach(it => {
+    const u = URL.createObjectURL(it.thumb || it.blob); urls.push(u);
+    const c = document.createElement('div'); c.className = 'card';
+    const im = document.createElement('img'); im.src = u; im.alt = it.nombre; im.loading = 'lazy';
+    const d = document.createElement('div');
+    const b = document.createElement('b'); b.textContent = it.marca || ' ';
+    d.appendChild(b); d.appendChild(document.createTextNode(it.nombre));
+    c.appendChild(im); c.appendChild(d); c.onclick = () => abrir(it.id);
+    g.appendChild(c);
+  });
+  $('count').textContent = lista.length === TODAS.length ? TODAS.length + ' fotos' : lista.length + ' de ' + TODAS.length;
+  const e = $('empty');
+  e.classList.toggle('hide', lista.length > 0);
+  e.textContent = TODAS.length ? 'No hay fotos con esa búsqueda.' : 'Todavía no guardaste ninguna foto. Andá a “Agregar fotos”.';
+}
+$('q').addEventListener('input', renderCatalogo);
+
+let mUrl = null;
+function abrir(id) {
+  actual = TODAS.find(x => x.id === id); if (!actual) return;
+  if (mUrl) URL.revokeObjectURL(mUrl);
+  mUrl = URL.createObjectURL(actual.blob);
+  $('m-img').src = mUrl; $('m-marca').value = actual.marca || ''; $('m-nombre').value = actual.nombre || '';
+  $('modal').classList.add('open');
+}
+function cerrar() { $('modal').classList.remove('open'); actual = null; }
+const nombreArchivo = it => ((it.marca ? it.marca + ' ' : '') + it.nombre).replace(/[\\/:*?"<>|]+/g, '').trim() + '.jpg';
+function descargar() {
+  if (!actual) return;
+  const a = document.createElement('a'); a.href = mUrl; a.download = nombreArchivo(actual); document.body.appendChild(a); a.click(); a.remove();
+}
+async function compartir() {
+  if (!actual) return;
+  const f = new File([actual.blob], nombreArchivo(actual), { type: 'image/jpeg' });
+  if (navigator.canShare && navigator.canShare({ files: [f] })) {
+    try { await navigator.share({ files: [f], title: actual.nombre }); } catch (e) {}
+  } else { descargar(); toast('Este navegador no comparte directo: se descargó la foto.'); }
+}
+async function guardarCambios() {
+  if (!actual) return;
+  const nombre = $('m-nombre').value.trim(); if (!nombre) { toast('El nombre no puede quedar vacío'); return; }
+  actual.marca = $('m-marca').value.trim(); actual.nombre = nombre;
+  await dbActualizar(actual); toast('Guardado ✓'); renderCatalogo();
+}
+async function eliminar() {
+  if (!actual || !confirm('¿Eliminar esta foto del catálogo?')) return;
+  await dbBorrar(actual.id); cerrar(); renderCatalogo(); toast('Eliminada');
+}
+
+/* ───────── Respaldo ───────── */
+const leerDataURL = b => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
+async function exportar() {
+  const todas = await dbTodas();
+  if (!todas.length) { toast('No hay fotos para respaldar'); return; }
+  toast('Preparando respaldo…');
+  const fotos = [];
+  for (const it of todas) fotos.push({ marca: it.marca, nombre: it.nombre, creado: it.creado, img: await leerDataURL(it.blob) });
+  const blob = new Blob([JSON.stringify({ version: 1, fotos })], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'catalogo-eshara-respaldo-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+$('imp').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text()); let n = 0;
+    for (const it of data.fotos || []) {
+      const blob = await (await fetch(it.img)).blob();
+      const im = await cargarImagen(blob), t = document.createElement('canvas'); const k = 360 / im.naturalWidth;
+      t.width = 360; t.height = Math.round(im.naturalHeight * k); t.getContext('2d').drawImage(im, 0, 0, t.width, t.height);
+      await dbAgregar({ marca: it.marca || '', nombre: it.nombre || 'Sin nombre', creado: it.creado || Date.now(), blob, thumb: await aBlob(t, 'image/jpeg', 0.82) });
+      n++;
+    }
+    toast(n + ' fotos cargadas'); renderCatalogo();
+  } catch (err) { toast('Ese archivo no es un respaldo válido'); }
+  e.target.value = '';
+});
+
+/* ───────── Eventos ───────── */
+function recibir(lista) {
+  const fs = [...lista].filter(f => f.type.startsWith('image/'));
+  if (!fs.length) { toast('Elegí imágenes'); return; }
+  S.files = fs; S.idx = 0;
+  $('step-pick').classList.add('hide'); $('step-edit').classList.remove('hide');
+  abrirFoto();
+}
+$('file').addEventListener('change', e => recibir(e.target.files));
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => recibir(e.dataTransfer.files));
+$('tol').addEventListener('input', () => { $('v-tol').textContent = $('tol').value; procesarPronto(); });
+$('nit').addEventListener('input', () => { $('v-nit').textContent = $('nit').value; procesarPronto(); });
+$('fmt').addEventListener('change', procesarPronto);
+document.querySelectorAll('input[name=metodo]').forEach(r => r.addEventListener('change', procesar));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar(); });
+// Instalación como app y funcionamiento sin internet
+let evInstalar = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); evInstalar = e; $('btn-install').classList.remove('hide'); });
+$('btn-install').addEventListener('click', async () => {
+  if (!evInstalar) return;
+  evInstalar.prompt(); try { await evInstalar.userChoice; } catch (e) {}
+  evInstalar = null; $('btn-install').classList.add('hide');
+});
+window.addEventListener('appinstalled', () => $('btn-install').classList.add('hide'));
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+actualizarContador();
+</script>
+</body>
+</html>
