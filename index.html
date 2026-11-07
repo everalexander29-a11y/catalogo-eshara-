@@ -117,8 +117,16 @@
           <div class="msg" style="margin-top:4px;">Si quedan restos del fondo o sombra, subilo. Si se come parte del frasco, bajalo.</div>
         </div>
         <div>
-          <label>Nitidez: <b id="v-nit">40</b></label>
-          <input type="range" id="nit" min="0" max="100" value="40">
+          <label>Nitidez y detalle: <b id="v-nit">60</b></label>
+          <input type="range" id="nit" min="0" max="100" value="60">
+        </div>
+        <div>
+          <label>Limpiar ruido y bloques: <b id="v-rui">40</b></label>
+          <input type="range" id="rui" min="0" max="100" value="40">
+          <div class="msg" style="margin-top:4px;">Ayuda con fotos chicas o borrosas de internet. Si se ve “plastificada”, bajalo.</div>
+        </div>
+        <div>
+          <label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink);margin:0;"><input type="checkbox" id="con" checked> Mejorar contraste y claridad</label>
         </div>
         <div>
           <label>Formato</label>
@@ -294,39 +302,161 @@ function quitarFondoLiso(canvas, tol) {
   return n / (w * h);   // proporción de la foto que se tomó como fondo
 }
 
-// Recorta alrededor del perfume y lo centra sobre fondo blanco con margen
-function centrar(canvas, fmt) {
-  const w = canvas.width, h = canvas.height, d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+// ── Reescalado de calidad (Lanczos): más nítido que el del navegador, sobre todo en iPhone ──
+function lz(x) { x = Math.abs(x); if (x < 1e-6) return 1; if (x >= 3) return 0; const p = Math.PI * x; return 3 * Math.sin(p) * Math.sin(p / 3) / (p * p); }
+function pesosLz(os, ns) {
+  const esc = os / ns, fs = Math.max(1, esc), sop = 3 * fs;
+  const starts = new Int32Array(ns), ws = new Array(ns);
+  for (let i = 0; i < ns; i++) {
+    const c = (i + 0.5) * esc - 0.5;
+    const s0 = Math.max(0, Math.floor(c - sop + 0.5)), e0 = Math.min(os - 1, Math.floor(c + sop + 0.5));
+    const w = new Float32Array(Math.max(1, e0 - s0 + 1)); let sum = 0;
+    for (let j = s0; j <= e0; j++) { const v = lz((j - c) / fs); w[j - s0] = v; sum += v; }
+    if (!sum) { w[0] = 1; sum = 1; }
+    for (let j = 0; j < w.length; j++) w[j] /= sum;
+    starts[i] = s0; ws[i] = w;
+  }
+  return { starts, ws };
+}
+function lanczos(im, nw, nh) {
+  const sw = im.width, sh = im.height, sd = im.data, px = pesosLz(sw, nw), py = pesosLz(sh, nh);
+  const tmp = new Float32Array(nw * sh * 3);
+  for (let y = 0; y < sh; y++) {
+    const ro = y * sw * 4;
+    for (let x = 0; x < nw; x++) {
+      const s0 = px.starts[x], ws = px.ws[x]; let r = 0, g = 0, b = 0;
+      for (let t = 0; t < ws.length; t++) { const i = ro + (s0 + t) * 4, wt = ws[t]; r += sd[i] * wt; g += sd[i + 1] * wt; b += sd[i + 2] * wt; }
+      const o = (y * nw + x) * 3; tmp[o] = r; tmp[o + 1] = g; tmp[o + 2] = b;
+    }
+  }
+  const out = new Uint8ClampedArray(nw * nh * 4);
+  for (let y = 0; y < nh; y++) {
+    const s0 = py.starts[y], ws = py.ws[y];
+    for (let x = 0; x < nw; x++) {
+      let r = 0, g = 0, b = 0;
+      for (let t = 0; t < ws.length; t++) { const o = ((s0 + t) * nw + x) * 3, wt = ws[t]; r += tmp[o] * wt; g += tmp[o + 1] * wt; b += tmp[o + 2] * wt; }
+      const i = (y * nw + x) * 4; out[i] = r; out[i + 1] = g; out[i + 2] = b; out[i + 3] = 255;
+    }
+  }
+  return new ImageData(out, nw, nh);
+}
+
+// ── Limpieza de ruido y bloques de JPEG que conserva los bordes (filtro bilateral 5x5) ──
+function limpiar(im, v) {
+  const w = im.width, h = im.height, s = im.data, o = new Uint8ClampedArray(s);
+  const sig = 6 + v * 0.22, inv = 1 / (6 * sig * sig);
+  const lut = new Float32Array(2048); for (let i = 0; i < 2048; i++) lut[i] = Math.exp(-(i * 4) * inv);
+  const sp = []; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) sp.push(Math.exp(-(dx * dx + dy * dy) / 4.5));
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, r0 = o[i], g0 = o[i + 1], b0 = o[i + 2];
+    let sw = 0, r = 0, g = 0, b = 0, t = 0;
+    for (let dy = -2; dy <= 2; dy++) {
+      const yy = y + dy;
+      for (let dx = -2; dx <= 2; dx++, t++) {
+        const xx = x + dx; if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+        const j = (yy * w + xx) * 4, dr = o[j] - r0, dg = o[j + 1] - g0, db = o[j + 2] - b0;
+        const k = (dr * dr + dg * dg + db * db) >> 2, wt = sp[t] * (k < 2048 ? lut[k] : 0);
+        sw += wt; r += o[j] * wt; g += o[j + 1] * wt; b += o[j + 2] * wt;
+      }
+    }
+    s[i] = r / sw; s[i + 1] = g / sw; s[i + 2] = b / sw;
+  }
+}
+
+// Recorta alrededor del perfume, limpia, reescala con calidad y lo centra sobre fondo blanco
+function centrar(canvas, fmt, ruido) {
+  const w = canvas.width, h = canvas.height, ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const d = ctx.getImageData(0, 0, w, h).data;
   let x0 = w, y0 = h, x1 = -1, y1 = -1;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = (y * w + x) * 4;
     if (765 - d[i] - d[i + 1] - d[i + 2] > 45) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   }
   if (x1 < 0) { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; }
+  x0 = Math.max(0, x0 - 2); y0 = Math.max(0, y0 - 2); x1 = Math.min(w - 1, x1 + 2); y1 = Math.min(h - 1, y1 + 2);
   const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
   const [CW, CH] = fmt === '4:5' ? [1080, 1350] : [1200, 1200];
-  const k = Math.min(3, (CW * 0.8) / bw, (CH * 0.8) / bh);
+  const k = Math.min(4, (CW * 0.8) / bw, (CH * 0.8) / bh);
+  const nw = Math.max(1, Math.round(bw * k)), nh = Math.max(1, Math.round(bh * k));
+  const src = ctx.getImageData(x0, y0, bw, bh);
+  if (ruido > 0) limpiar(src, ruido);
+  const rs = lanczos(src, nw, nh);
   const out = document.createElement('canvas'); out.width = CW; out.height = CH;
   const x = out.getContext('2d', { willReadFrequently: true });
   x.fillStyle = '#fff'; x.fillRect(0, 0, CW, CH);
-  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
-  const dw = bw * k, dh = bh * k;
-  x.drawImage(canvas, x0, y0, bw, bh, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+  x.putImageData(rs, Math.round((CW - nw) / 2), Math.round((CH - nh) / 2));
+  out.escala = k;
   return out;
 }
 
-// Nitidez (máscara de enfoque 3x3)
-function afilar(canvas, valor) {
-  if (!valor) return;
+// ── Desenfoques para la nitidez ──
+function gauss(Y, w, h, sig) {
+  const r = Math.max(1, Math.ceil(sig * 3)), k = new Float32Array(2 * r + 1); let sum = 0;
+  for (let i = -r; i <= r; i++) { k[i + r] = Math.exp(-i * i / (2 * sig * sig)); sum += k[i + r]; }
+  for (let i = 0; i < k.length; i++) k[i] /= sum;
+  const T = new Float32Array(w * h), O = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let a = 0; for (let j = -r; j <= r; j++) { const xx = x + j < 0 ? 0 : x + j >= w ? w - 1 : x + j; a += Y[y * w + xx] * k[j + r]; }
+    T[y * w + x] = a;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let a = 0; for (let j = -r; j <= r; j++) { const yy = y + j < 0 ? 0 : y + j >= h ? h - 1 : y + j; a += T[yy * w + x] * k[j + r]; }
+    O[y * w + x] = a;
+  }
+  return O;
+}
+function cajaH(a, b, w, h, r) {
+  const inv = 1 / (2 * r + 1);
+  for (let y = 0; y < h; y++) {
+    const o = y * w; let s = a[o] * (r + 1); for (let i = 0; i < r; i++) s += a[o + Math.min(i, w - 1)];
+    for (let x = 0; x < w; x++) { s += a[o + Math.min(w - 1, x + r)] - a[o + Math.max(0, x - r - 1)]; b[o + x] = s * inv; }
+  }
+}
+function cajaV(a, b, w, h, r) {
+  const inv = 1 / (2 * r + 1);
+  for (let x = 0; x < w; x++) {
+    let s = a[x] * (r + 1); for (let i = 0; i < r; i++) s += a[Math.min(i, h - 1) * w + x];
+    for (let y = 0; y < h; y++) { s += a[Math.min(h - 1, y + r) * w + x] - a[Math.max(0, y - r - 1) * w + x]; b[y * w + x] = s * inv; }
+  }
+}
+function suaveGrande(Y, w, h, sig) {   // desenfoque grande y rápido (3 pasadas de cajas)
+  const r = Math.max(1, Math.round((Math.sqrt(4 * sig * sig + 1) - 1) / 2));
+  const t1 = new Float32Array(w * h), t2 = new Float32Array(w * h), t3 = new Float32Array(w * h);
+  cajaH(Y, t1, w, h, r); cajaV(t1, t2, w, h, r);
+  cajaH(t2, t1, w, h, r); cajaV(t1, t3, w, h, r);
+  cajaH(t3, t1, w, h, r); cajaV(t1, t2, w, h, r);
+  return t2;
+}
+
+// ── Mejora final: contraste, nitidez fina, claridad y fondo blanco puro ──
+function mejorar(canvas, nit, contraste) {
   const w = canvas.width, h = canvas.height, ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const im = ctx.getImageData(0, 0, w, h), d = im.data, o = new Uint8ClampedArray(d), cant = valor / 100 * 1.3;
-  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
-    const i = (y * w + x) * 4;
-    for (let c = 0; c < 3; c++) {
-      const j = i + c;
-      const blur = (o[j - 4 - w * 4] + o[j - w * 4] + o[j + 4 - w * 4] + o[j - 4] + o[j] + o[j + 4] + o[j - 4 + w * 4] + o[j + w * 4] + o[j + 4 + w * 4]) / 9;
-      d[j] = o[j] + cant * (o[j] - blur);
+  const im = ctx.getImageData(0, 0, w, h), d = im.data, n = w * h;
+  const Y = new Float32Array(n);
+  for (let i = 0; i < n; i++) Y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  if (contraste) {   // si los negros están "lavados", se profundizan
+    const hist = new Uint32Array(256); let tot = 0;
+    for (let i = 0; i < n; i++) if (Y[i] < 240) { hist[Y[i] | 0]++; tot++; }
+    let ac = 0, lo = 0; for (let v = 0; v < 256; v++) { ac += hist[v]; if (ac >= tot * 0.005) { lo = v; break; } }
+    if (tot > n * 0.02 && lo > 6 && lo < 110) {
+      const g = 255 / (255 - lo);
+      for (let i = 0; i < n; i++) { for (let c = 0; c < 3; c++) d[i * 4 + c] = (d[i * 4 + c] - lo) * g; Y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; }
     }
+  }
+  if (nit > 0) {
+    const a = nit / 100;
+    const fino = gauss(Y, w, h, 1.4);
+    const grande = contraste ? suaveGrande(Y, w, h, 18) : null;
+    const af = 0.5 + 1.5 * a, ag = 0.35 * a;
+    for (let i = 0; i < n; i++) {
+      const df = Y[i] - fino[i];
+      let dl = Math.abs(df) < 1.2 ? df * af * 0.3 : df * af;   // el ruido plano casi no se toca
+      if (grande) dl += ag * (Y[i] - grande[i]);
+      d[i * 4] += dl; d[i * 4 + 1] += dl; d[i * 4 + 2] += dl;
+    }
+  }
+  for (let i = 0; i < n; i++) {   // fondo blanco puro
+    if (d[i * 4] >= 246 && d[i * 4 + 1] >= 246 && d[i * 4 + 2] >= 246) { d[i * 4] = 255; d[i * 4 + 1] = 255; d[i * 4 + 2] = 255; }
   }
   ctx.putImageData(im, 0, 0);
 }
@@ -343,37 +473,48 @@ async function iaQuitarFondo(file) {
   return aCanvas(await cargarImagen(blob));
 }
 
-// Recalcula el resultado con los controles actuales
+// Recalcula el resultado con los controles actuales (guarda las etapas lentas para que las barras respondan rápido)
 async function procesar() {
   if (!S.img) return;
   const mi = ++S.token;
   const metodo = document.querySelector('input[name=metodo]:checked').value;
   $('box-tol').classList.toggle('hide', metodo === 'ia');
-  let trabajo;
-  try {
-    if (metodo === 'ia') {
-      if (!S.ia) {
-        setMsg('Quitando el fondo con IA… la primera vez descarga el modelo y puede tardar un rato.');
-        S.ia = await iaQuitarFondo(S.files[S.idx]);
-        if (mi !== S.token) return;
+  const kA = S.idx + '|' + metodo + '|' + (metodo === 'ia' ? '' : $('tol').value);
+  let A = S.cA && S.cA.k === kA ? S.cA.c : null;
+  if (!A) {
+    try {
+      if (metodo === 'ia') {
+        if (!S.ia) {
+          setMsg('Quitando el fondo con IA… la primera vez descarga el modelo y puede tardar un rato.');
+          S.ia = await iaQuitarFondo(S.files[S.idx]);
+          if (mi !== S.token) return;
+        }
+        A = copiarCanvas(S.ia);
+        setMsg('Fondo quitado con IA.');
+      } else {
+        A = copiarCanvas(S.base);
+        const frac = quitarFondoLiso(A, +$('tol').value);
+        if (frac < 0.05) setMsg('Casi no se detectó fondo. Si la foto tiene fondo, subí “Cuánto fondo quitar” o probá con IA.', true);
+        else if (frac > 0.97) setMsg('Se quitó casi toda la foto. Bajá “Cuánto fondo quitar”.', true);
+        else setMsg('');
       }
-      trabajo = copiarCanvas(S.ia);
-      setMsg('Fondo quitado con IA.');
-    } else {
-      trabajo = copiarCanvas(S.base);
-      const frac = quitarFondoLiso(trabajo, +$('tol').value);
-      if (frac < 0.05) setMsg('Casi no se detectó fondo. Si la foto tiene fondo, subí “Cuánto fondo quitar” o probá con IA.', true);
-      else if (frac > 0.97) setMsg('Se quitó casi toda la foto. Bajá “Cuánto fondo quitar”.', true);
-      else setMsg('');
+    } catch (e) {
+      setMsg('No se pudo usar la IA (' + (e.message || 'sin conexión') + '). Probá con “Fondo liso” o revisá tu internet.', true);
+      document.querySelector('input[name=metodo][value=liso]').checked = true;
+      S.ia = null;
+      return procesar();
     }
-  } catch (e) {
-    setMsg('No se pudo usar la IA (' + (e.message || 'sin conexión') + '). Probá con “Fondo liso” o revisá tu internet.', true);
-    document.querySelector('input[name=metodo][value=liso]').checked = true;
-    S.ia = null;
-    return procesar();
+    S.cA = { k: kA, c: A };
   }
-  const fin = centrar(trabajo, $('fmt').value);
-  afilar(fin, +$('nit').value);
+  await new Promise(r => setTimeout(r, 0));
+  if (mi !== S.token) return;
+  const kB = kA + '|' + $('fmt').value + '|' + $('rui').value;
+  let B = S.cB && S.cB.k === kB ? S.cB.c : null;
+  if (!B) { B = centrar(A, $('fmt').value, +$('rui').value); S.cB = { k: kB, c: B }; }
+  await new Promise(r => setTimeout(r, 0));
+  if (mi !== S.token) return;
+  const fin = copiarCanvas(B);
+  mejorar(fin, +$('nit').value, $('con').checked);
   S.result = fin;
   mostrar(fin, $('cv-out'));
 }
@@ -386,7 +527,7 @@ async function abrirFoto() {
   try {
     S.img = await cargarImagen(f);
   } catch (e) { toast('No se pudo abrir ' + f.name); return siguiente(); }
-  S.base = aCanvas(S.img); S.ia = null; S.token++;
+  S.base = aCanvas(S.img); S.ia = null; S.cA = null; S.cB = null; S.token++;
   mostrar(S.base, $('cv-orig'));
   $('marca').value = ''; $('nombre').value = '';
   const base = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
@@ -534,6 +675,8 @@ const drop = $('drop');
 drop.addEventListener('drop', e => recibir(e.dataTransfer.files));
 $('tol').addEventListener('input', () => { $('v-tol').textContent = $('tol').value; procesarPronto(); });
 $('nit').addEventListener('input', () => { $('v-nit').textContent = $('nit').value; procesarPronto(); });
+$('rui').addEventListener('input', () => { $('v-rui').textContent = $('rui').value; procesarPronto(); });
+$('con').addEventListener('change', procesarPronto);
 $('fmt').addEventListener('change', procesarPronto);
 document.querySelectorAll('input[name=metodo]').forEach(r => r.addEventListener('change', procesar));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar(); });
